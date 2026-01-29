@@ -6,7 +6,8 @@ const auth = betterAuth({
    database: prismaAdapter(prisma, {
       provider: "postgresql",
    }),
-   secret: process.env.AUTH_SECRET,
+   basePath: "/api/auth",
+   trustedOrigins: ["http://localhost:3000"],
    socialProviders: {
       github: {
          clientId: process.env.GITHUB_CLIENT_ID,
