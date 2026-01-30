@@ -1,10 +1,11 @@
 "use client";
+
 import { authClient } from "@/lib/auth-client";
 import { Card, CardContent } from "./ui/card";
 import { useRouter } from "next/navigation";
 import { Button } from "./ui/button";
-import Image from "next/image";
 import { useState } from "react";
+import Image from "next/image";
 
 export default function LoginForm() {
 	const router = useRouter();

@@ -1,6 +1,6 @@
-import express from "express";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { auth } from "../lib/auth.js";
+import express from "express";
 import cors from "cors";
 import "dotenv/config";
 
@@ -23,6 +23,7 @@ app.get("/api/me", async (req, res) => {
    const session = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
    });
+   console.log("Headers", session);
    return res.json(session);
 });
 
