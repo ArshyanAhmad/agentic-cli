@@ -1,5 +1,5 @@
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
-import { auth } from "../lib/auth.js";
+import { auth } from "./lib/auth.js";
 import express from "express";
 import cors from "cors";
 import "dotenv/config";

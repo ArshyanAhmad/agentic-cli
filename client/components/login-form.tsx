@@ -15,7 +15,7 @@ export default function LoginForm() {
 		<div className="flex flex-col gap-6 justify-center items-center">
 			<div className="flex flex-col items-center justify-center space-y-4">
 				<Image src={"/login.svg"} alt="login" height={500} width={500} />
-				<h1 className="text-6xl font-extrabold text-indigo-400">Welcome Back! to Orbital Cli</h1>
+				<h1 className="text-6xl font-extrabold text-indigo-400">Welcome Back! to Helios Cli</h1>
 
 				<p className="text-base font-medium text-zinc-400">Login to your account for allowing device flow</p>
 			</div>
