@@ -5,6 +5,7 @@ import chalk from "chalk";
 import figlet from "figlet";
 
 import { Command } from "commander";
+import { login } from "./commands/auth/login.js";
 
 async function main() {
    // Display  banner
@@ -23,7 +24,8 @@ async function main() {
 
    program
       .version("0.0.1")
-      .description("Helios CLI - A command line tool for AI interactions");
+      .description("Helios CLI - A CLI based AI Tool")
+      .addCommand(login);
 
    program.action(() => {
       program.help();
