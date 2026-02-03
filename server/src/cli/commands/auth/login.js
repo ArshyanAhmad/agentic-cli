@@ -5,7 +5,7 @@ import { logger } from "better-auth";
 
 import chalk from "chalk";
 import { Command } from "commander";
-import fs from "node:fs/promises";
+import fs from "fs";
 import path from "path";
 import os from "os";
 import yoctoSpinner from "yocto-spinner";

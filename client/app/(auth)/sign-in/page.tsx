@@ -3,15 +3,14 @@
 import LoginForm from "@/components/login-form"
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
+import { redirect } from "next/navigation";
 
 export default function page() {
 
     const { data, isPending } = authClient.useSession();
-    const router = useRouter();
 
     if (data?.session && data?.user) {
-        router.push("/");
+        redirect("/");
     }
 
     if (isPending) {
