@@ -5,7 +5,6 @@ import { logger } from "better-auth";
 
 import chalk from "chalk";
 import { Command } from "commander";
-import fs from "fs";
 import path from "path";
 import os from "os";
 import yoctoSpinner from "yocto-spinner";
@@ -14,11 +13,8 @@ import * as zod from "zod/v4";
 import "dotenv/config";
 
 import { prisma } from "../../../lib/db.js";
-import {
-   getStoredToken,
-   isTokenExpired,
-   storeToken,
-} from "../../../lib/token.js";
+
+import fs from "fs/promises";
 
 const URL = "http://localhost:3005";
 const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
@@ -26,6 +22,87 @@ export const CONFIG_DIR = path.join(os.homedir(), ".better-auth");
 export const TOKEN_FILE = path.join(CONFIG_DIR, "token.json");
 
 // Token Management Functions
+
+export async function getStoredToken() {
+   try {
+      const data = await fs.readFile(TOKEN_FILE, "utf-8");
+      const token = JSON.parse(data);
+      console.log("TOken in get ", token);
+
+      return token;
+   } catch (error) {
+      return null;
+   }
+}
+
+export async function storeToken() {
+   try {
+      await fs.mkdir(CONFIG_DIR, { recursive: true });
+      const token = await getStoredToken();
+
+      console.log("TOken", token);
+
+      const tokenData = {
+         accessToken: token.access_token,
+         refreshToken: token.refresh_token,
+         token_type: token.token_type || "Bearer",
+         expiresIn: token.expires_in
+            ? new Date(Date.now() + token.expires_in * 1000).toISOString()
+            : null,
+         created_at: new Date().toISOString(),
+      };
+      await fs.writeFile(
+         TOKEN_FILE,
+         JSON.stringify(tokenData, null, 2),
+         "utf-8",
+      );
+
+      return true;
+   } catch (error) {
+      console.log(chalk.red("Failed to store token:", error.message));
+      return false;
+   }
+}
+
+export async function clearStoredToken() {
+   try {
+      await fs.unlink(TOKEN_FILE);
+      return true;
+   } catch (error) {
+      return false;
+   }
+}
+
+export async function isTokenExpired() {
+   const token = await getStoredToken();
+
+   if (!token || !token.expires_at) {
+      return true;
+   }
+   const expiresAt = new Date(token.expires_at);
+   const now = new Date();
+
+   return expiresAt.getTime() - now.getTime() < 5 * 60 * 1000;
+}
+
+export async function requireAuth() {
+   const token = await getStoredToken();
+
+   if (!token) {
+      console.log(chalk.red("❌ No stored token found. Please log in."));
+      process.exit(1);
+   }
+
+   if (await isTokenExpired(token)) {
+      console.log(
+         chalk.yellow("⚠️  Stored token has expired. Please log in again."),
+      );
+      console.log(chalk.gray("    Run: your-cli login\n"));
+      process.exit(1);
+   }
+
+   return token;
+}
 
 export async function loginAction(opts) {
    const options = zod.object({
@@ -229,6 +306,12 @@ async function polForToken(
 
       setTimeout(poll, pollingInterval * 1000);
    });
+}
+
+async function logoutAction() {
+   intro(chalk.bold("👋 Logout"));
+
+   const token = await getStoredToken();
 }
 
 // Commander Setup
