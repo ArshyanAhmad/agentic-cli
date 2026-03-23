@@ -3,15 +3,15 @@
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
-import Image from "next/image";
+import { redirect } from "next/navigation";
 
 export default function Home() {
+
   const { data, isPending } = authClient.useSession();
-  const router = useRouter();
+  // const router = useRouter();
 
   if (!data?.session && !data?.user) {
-    router.push("/sign-in");
+    redirect("/sign-in");
   }
 
   if (isPending) {
@@ -64,7 +64,7 @@ export default function Home() {
               fetchOptions: {
                 onError: (ctx) => console.log(ctx),
                 onSuccess: () => {
-                  router.push("/sign-in");
+                  redirect("/sign-in");
                 }
               }
             })}

@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { cancel, confirm, intro, isCancel, outro } from "@clack/prompts";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/client";
@@ -10,47 +11,67 @@ import os from "os";
 import yoctoSpinner from "yocto-spinner";
 import open from "open";
 import * as zod from "zod/v4";
-import "dotenv/config";
-
-import { prisma } from "../../../lib/db.js";
 
 import fs from "fs/promises";
 
+// ================= CONFIG =================
 const URL = "http://localhost:3005";
-const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
+const CLIENT_ID = process.env.GITHUB_CLIENT_ID || "Iv23liEHLnppccnwyAy2";
+
+console.log("CLIENT IS WORKING: ", CLIENT_ID);
+
 export const CONFIG_DIR = path.join(os.homedir(), ".better-auth");
+console.log("CONFIG ", CONFIG_DIR);
+
 export const TOKEN_FILE = path.join(CONFIG_DIR, "token.json");
+console.log("TOken File", TOKEN_FILE);
 
-// Token Management Functions
+// ================= STORAGE INIT =================
+async function ensureDir() {
+   await fs.mkdir(CONFIG_DIR, { recursive: true });
+}
 
-export async function getStoredToken() {
+async function ensureTokenFile() {
    try {
-      const data = await fs.readFile(TOKEN_FILE, "utf-8");
-      const token = JSON.parse(data);
-      console.log("TOken in get ", token);
-
-      return token;
-   } catch (error) {
-      return null;
+      await fs.access(TOKEN_FILE);
+   } catch {
+      await fs.writeFile(TOKEN_FILE, JSON.stringify({}, null, 2), "utf-8");
+      console.log("✅ token.json created");
    }
 }
 
-export async function storeToken() {
-   try {
-      await fs.mkdir(CONFIG_DIR, { recursive: true });
-      const token = await getStoredToken();
+export async function initStorage() {
+   await ensureDir();
+   await ensureTokenFile();
+}
 
-      console.log("TOken", token);
+// ================= TOKEN MANAGEMENT =================
+export async function getStoredToken() {
+   try {
+      const data = await fs.readFile(TOKEN_FILE, "utf-8");
+      const token = JSON.parse(data || "{}");
+      console.log("TOken in get ", token);
+      return token;
+   } catch (error) {
+      console.error("Error reading token:", error);
+      return {};
+   }
+}
+
+export async function storeToken(token) {
+   try {
+      await ensureDir();
 
       const tokenData = {
-         accessToken: token.access_token,
-         refreshToken: token.refresh_token,
+         access_token: token.access_token,
+         refresh_token: token.refresh_token,
          token_type: token.token_type || "Bearer",
-         expiresIn: token.expires_in
+         expires_at: token.expires_in
             ? new Date(Date.now() + token.expires_in * 1000).toISOString()
             : null,
          created_at: new Date().toISOString(),
       };
+
       await fs.writeFile(
          TOKEN_FILE,
          JSON.stringify(tokenData, null, 2),
@@ -79,6 +100,7 @@ export async function isTokenExpired() {
    if (!token || !token.expires_at) {
       return true;
    }
+
    const expiresAt = new Date(token.expires_at);
    const now = new Date();
 
@@ -88,12 +110,12 @@ export async function isTokenExpired() {
 export async function requireAuth() {
    const token = await getStoredToken();
 
-   if (!token) {
+   if (!token || !token.access_token) {
       console.log(chalk.red("❌ No stored token found. Please log in."));
       process.exit(1);
    }
 
-   if (await isTokenExpired(token)) {
+   if (await isTokenExpired()) {
       console.log(
          chalk.yellow("⚠️  Stored token has expired. Please log in again."),
       );
@@ -104,18 +126,24 @@ export async function requireAuth() {
    return token;
 }
 
+// ================= LOGIN =================
 export async function loginAction(opts) {
-   const options = zod.object({
-      serverUrl: zod.string().optional(),
-      clientId: zod.string().optional(),
-   });
+   await initStorage(); // 🔥 FIX
+
+   const options = zod
+      .object({
+         serverUrl: zod.string().optional(),
+         clientId: zod.string().optional(),
+      })
+      .parse(opts);
 
    const serverUrl = options.serverUrl || URL;
    const clientId = options.clientId || CLIENT_ID;
 
+   console.log("Client Id", clientId);
+
    intro(chalk.bold("🔐 Auth CLI Login "));
 
-   // TODO :change with this token management
    const existingToken = await getStoredToken();
    const expired = await isTokenExpired();
 
@@ -142,16 +170,17 @@ export async function loginAction(opts) {
    try {
       const { data, error } = await authClient.device.code({
          client_id: clientId,
-         scope: "openid profile eamil",
+         scope: "openid profile email",
       });
 
       spinner.stop();
 
+      console.log("Data data", data);
+
       if (error || !data) {
          logger.error(
-            `Failed to request device authorization: ${error.error_description}`,
+            `Failed to request device authorization: ${error?.error_description}`,
          );
-
          process.exit(1);
       }
 
@@ -163,10 +192,13 @@ export async function loginAction(opts) {
          expires_in,
          interval,
       } = data;
+
       console.log(chalk.cyan("Device Authorization Required"));
 
       console.log(
-         `Please visit: ${chalk.underline.blue(verification_uri || verification_uri_complete)}`,
+         `Please visit: ${chalk.underline.blue(
+            verification_uri || verification_uri_complete,
+         )}`,
       );
 
       console.log(`Enter code: ${chalk.bold.green(user_code)}`);
@@ -183,7 +215,9 @@ export async function loginAction(opts) {
 
       console.log(
          chalk.gray(
-            `Waiting for authorization (expires in ${Math.floor(expires_in / 60)} minutes)...`,
+            `Waiting for authorization (expires in ${Math.floor(
+               expires_in / 60,
+            )} minutes)...`,
          ),
       );
 
@@ -195,7 +229,7 @@ export async function loginAction(opts) {
       );
 
       if (token) {
-         const saved = await storeToken();
+         const saved = await storeToken(token);
 
          if (!saved) {
             console.log(
@@ -203,14 +237,10 @@ export async function loginAction(opts) {
                   "⚠️  Warning: could not save authentication token.",
                ),
             );
-
             console.log(
                chalk.yellow(" You may need to log in again next time."),
             );
          }
-
-         // TODO: Fetch user info and store in DB
-         // const user = await prisma.user.findFirst
 
          outro(chalk.green("✅ Login successful!"));
          console.log(chalk.gray("\n Token saved to: ", TOKEN_FILE));
@@ -228,24 +258,24 @@ export async function loginAction(opts) {
    }
 }
 
-async function polForToken(
-   authClient,
-   deviceCode,
-   clientId,
-   initialIntervalValue,
-) {
-   let pollingInterval = initialIntervalValue;
+// ================= POLLING =================
+async function polForToken(authClient, deviceCode, clientId, interval) {
+   let pollingInterval = interval;
    const spinner = yoctoSpinner({
       text: "Waiting for user authorization...",
       color: "cyan",
    });
 
    let dots = 0;
-   return new Promise((resolve, reject) => {
+
+   return new Promise((resolve) => {
       const poll = async () => {
          dots = (dots + 1) % 4;
+
          spinner.text = chalk.gray(
-            `Polling for authorization${".".repeat(dots)}${" ".repeat(3 - dots)}`,
+            `Polling for authorization${".".repeat(dots)}${" ".repeat(
+               3 - dots,
+            )}`,
          );
 
          if (!spinner.isSpinning) spinner.start();
@@ -255,11 +285,6 @@ async function polForToken(
                grant_type: "urn:ietf:params:oauth:grant-type:device_code",
                device_code: deviceCode,
                client_id: clientId,
-               fetchOptions: {
-                  headers: {
-                     "user-agent": "My CLI",
-                  },
-               },
             });
 
             if (data?.access_token) {
@@ -271,12 +296,11 @@ async function polForToken(
                );
 
                spinner.stop("Authorization successful!");
-               resolve(data.access_token);
+               resolve(data);
                return;
             } else if (error) {
                switch (error.error) {
                   case "authorization_pending":
-                     // Continue polling
                      break;
                   case "slow_down":
                      pollingInterval += 5;
@@ -308,16 +332,61 @@ async function polForToken(
    });
 }
 
+// ================= LOGOUT =================
 async function logoutAction() {
    intro(chalk.bold("👋 Logout"));
 
    const token = await getStoredToken();
+
+   if (!token || !token.access_token) {
+      console.log(chalk.yellow("You're not logged in."));
+      process.exit(0);
+   }
+
+   const shouldLogout = await confirm({
+      message: "Are you sure you want to logout?",
+      initialValue: false,
+   });
+
+   if (isCancel(shouldLogout) || !shouldLogout) {
+      cancel("Logout concelled");
+      process.exit(0);
+   }
+
+   const cleared = await clearStoredToken();
+
+   if (cleared) {
+      outro(chalk.green("✅ Successfully logged out!"));
+   } else {
+      console.log(chalk.yellow("Could not clear token file."));
+   }
 }
 
-// Commander Setup
+// ================= WHOAMI =================
+export async function whoamiAction() {
+   await initStorage();
 
+   const token = await requireAuth();
+
+   console.log(
+      chalk.bold.greenBright(`\n👤 User Token Info:
+      Access Token: ${token.access_token}
+      Token Type: ${token.token_type}
+      Expires At: ${token.expires_at}`),
+   );
+}
+
+// ================= COMMANDS =================
 export const login = new Command("login")
    .description("Login to the Better Auth")
    .option("--server-url <url>", "The Better Auth server URL", URL)
    .option("--client-id <id>", "The OAuth Client ID", CLIENT_ID)
    .action(loginAction);
+
+export const logout = new Command("logout")
+   .description("Logout and clear stored credentias")
+   .action(logoutAction);
+
+export const whoami = new Command("whoami")
+   .description("Show current authenticated user")
+   .action(whoamiAction);
