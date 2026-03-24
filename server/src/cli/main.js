@@ -6,6 +6,7 @@ import figlet from "figlet";
 
 import { Command } from "commander";
 import { login, logout, whoami } from "./commands/auth/login.js";
+import { wakeUp } from "./ai/wakeUp.js";
 
 async function main() {
    // Display  banner
@@ -27,7 +28,8 @@ async function main() {
       .description("Helios CLI - A CLI based AI Tool")
       .addCommand(login)
       .addCommand(logout)
-      .addCommand(whoami);
+      .addCommand(whoami)
+      .addCommand(wakeUp);
 
    program.action(() => {
       program.help();

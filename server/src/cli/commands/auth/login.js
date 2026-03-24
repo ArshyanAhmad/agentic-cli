@@ -11,20 +11,16 @@ import os from "os";
 import yoctoSpinner from "yocto-spinner";
 import open from "open";
 import * as zod from "zod/v4";
-
 import fs from "fs/promises";
+
+import { prisma } from "../../../lib/db.js";
 
 // ================= CONFIG =================
 const URL = "http://localhost:3005";
 const CLIENT_ID = process.env.GITHUB_CLIENT_ID || "Iv23liEHLnppccnwyAy2";
 
-console.log("CLIENT IS WORKING: ", CLIENT_ID);
-
 export const CONFIG_DIR = path.join(os.homedir(), ".better-auth");
-console.log("CONFIG ", CONFIG_DIR);
-
 export const TOKEN_FILE = path.join(CONFIG_DIR, "token.json");
-console.log("TOken File", TOKEN_FILE);
 
 // ================= STORAGE INIT =================
 async function ensureDir() {
@@ -50,7 +46,7 @@ export async function getStoredToken() {
    try {
       const data = await fs.readFile(TOKEN_FILE, "utf-8");
       const token = JSON.parse(data || "{}");
-      console.log("TOken in get ", token);
+
       return token;
    } catch (error) {
       console.error("Error reading token:", error);
@@ -140,8 +136,6 @@ export async function loginAction(opts) {
    const serverUrl = options.serverUrl || URL;
    const clientId = options.clientId || CLIENT_ID;
 
-   console.log("Client Id", clientId);
-
    intro(chalk.bold("🔐 Auth CLI Login "));
 
    const existingToken = await getStoredToken();
@@ -174,8 +168,6 @@ export async function loginAction(opts) {
       });
 
       spinner.stop();
-
-      console.log("Data data", data);
 
       if (error || !data) {
          logger.error(
@@ -363,16 +355,38 @@ async function logoutAction() {
 }
 
 // ================= WHOAMI =================
-export async function whoamiAction() {
-   await initStorage();
-
+export async function whoamiAction(opts) {
    const token = await requireAuth();
 
+   if (!token?.access_token) {
+      console.log("No access token found. Please login.");
+      process.exit(1);
+   }
+
+   await initStorage();
+
+   const user = await prisma.user.findFirst({
+      where: {
+         sessions: {
+            some: {
+               token: token.access_token,
+            },
+         },
+      },
+      select: {
+         id: true,
+         name: true,
+         email: true,
+         image: true,
+      },
+   });
+
    console.log(
-      chalk.bold.greenBright(`\n👤 User Token Info:
-      Access Token: ${token.access_token}
-      Token Type: ${token.token_type}
-      Expires At: ${token.expires_at}`),
+      chalk.bold.greenBright(` 
+         👤 User: ${user.name}, 
+         📧 Email: ${user.email}, 
+         👤 ID: ${user.id}
+      `),
    );
 }
 
